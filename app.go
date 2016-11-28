@@ -38,10 +38,10 @@ func init() {
 }
 
 // handleCallback is Webgook endpoint
-func handleCallback(e []*linebot.Event, r *http.Request) {
+func handleCallback(evs []*linebot.Event, r *http.Request) {
 	c := newContext(r)
-	ts := make([]*taskqueue.Task, len(e))
-	for i, e := range e {
+	ts := make([]*taskqueue.Task, len(evs))
+	for i, e := range evs {
 		j, err := json.Marshal(e)
 		if err != nil {
 			errorf(c, "json.Marshal: %v", err)
