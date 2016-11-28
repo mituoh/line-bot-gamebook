@@ -38,11 +38,11 @@ func init() {
 }
 
 // handleCallback is Webgook endpoint
-func handleCallback(evs []*linebot.Event, r *http.Request) {
+func handleCallback(events []*linebot.Event, r *http.Request) {
 	c := newContext(r)
-	ts := make([]*taskqueue.Task, len(evs))
-	for i, e := range evs {
-		j, err := json.Marshal(e)
+	ts := make([]*taskqueue.Task, len(events))
+	for i, event := range events {
+		j, err := json.Marshal(event)
 		if err != nil {
 			errorf(c, "json.Marshal: %v", err)
 			return
@@ -84,10 +84,15 @@ func handleTask(w http.ResponseWriter, r *http.Request) {
 
 	logf(c, "EventType: %s\nMessage: %#v", e.Type, e.Message)
 
-	m := linebot.NewTextMessage("ok")
-	if _, err = bot.ReplyMessage(e.ReplyToken, m).WithContext(c).Do(); err != nil {
-		errorf(c, "ReplayMessage: %v", err)
-		return
+	if e.Type == linebot.EventTypeMessage {
+		switch message := e.Message.(type) {
+		case *linebot.TextMessage:
+			m := linebot.NewTextMessage(message.Text + "とな")
+			if _, err = bot.ReplyMessage(e.ReplyToken, m).WithContext(c).Do(); err != nil {
+				errorf(c, "ReplayMessage: %v", err)
+				return
+			}
+		}
 	}
 
 	w.WriteHeader(200)
