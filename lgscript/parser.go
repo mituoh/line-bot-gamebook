@@ -74,24 +74,10 @@ func (p *Parser) Parse(a string) ([]Script, error) {
 
 			// BRANCH
 			// First branch
-			p.scanIgnoreWhitespace() // "-"
-			p.scanIgnoreWhitespace() // "["
-			_, lit = p.scanIgnoreWhitespace()
-			// println("\tBRANCH-GOTO-ADDRESS : " + lit)
-			script.Action.Branch1.Address = lit
-			_, litTEXT = p.scanIgnoreWhitespace()
-			// println("\t\tTEXT : " + litTEXT)
-			script.Action.Branch1.Text = litTEXT
+			p.parseBranch(&script.Action.Branch1.Address, &script.Action.Branch1.Text)
 
 			// Second branch
-			p.scanIgnoreWhitespace() // "-"
-			p.scanIgnoreWhitespace() // "["
-			_, lit = p.scanIgnoreWhitespace()
-			// println("\tBRANCH-GOTO-ADDRESS : " + lit)
-			script.Action.Branch2.Address = lit
-			_, litTEXT = p.scanIgnoreWhitespace()
-			// println("\t\tTEXT : " + litTEXT)
-			script.Action.Branch2.Text = litTEXT
+			p.parseBranch(&script.Action.Branch2.Address, &script.Action.Branch2.Text)
 
 			// END
 			t, _ := p.scanIgnoreWhitespace()
@@ -112,6 +98,17 @@ func (p *Parser) Parse(a string) ([]Script, error) {
 			return scripts, nil
 		}
 	}
+}
+
+func (p *Parser) parseBranch(a *string, t *string) {
+	p.scanIgnoreWhitespace() // "-"
+	p.scanIgnoreWhitespace() // "["
+	_, lit := p.scanIgnoreWhitespace()
+	*a = lit
+	// println("\tBRANCH-GOTO-ADDRESS : " + lit)
+	_, litTEXT := p.scanIgnoreWhitespace()
+	*t = litTEXT
+	// println("\t\tTEXT : " + litTEXT)
 }
 
 // scanIgnoreWhitespace scans the next non-whitespace token.
