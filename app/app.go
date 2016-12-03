@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/log"
@@ -17,7 +18,15 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/line/line-bot-sdk-go/linebot"
 	"github.com/line/line-bot-sdk-go/linebot/httphandler"
+
+	"github.com/mituoh/line-bot-gamebook/lgscript"
 )
+
+// Msg represents a push message.
+type Msg struct {
+	UserID string          `json:"userId"`
+	Script lgscript.Script `json:"script"`
+}
 
 var botHandler *httphandler.WebhookHandler
 
@@ -35,6 +44,7 @@ func init() {
 
 	http.Handle("/callback", botHandler)
 	http.HandleFunc("/task", handleTask)
+	http.HandleFunc("/push", handlePush)
 }
 
 // handleCallback is Webgook endpoint
@@ -76,22 +86,86 @@ func handleTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	logf(c, "EventType: %s\nMessage: %#v", e.Type, e.Message)
+
+	if e.Type == linebot.EventTypeMessage {
+		switch message := e.Message.(type) {
+		case *linebot.TextMessage:
+			scripts, _ := lgscript.Load(message.Text)
+			i := 0
+			for script := range scripts {
+				i++
+				lm := Msg{UserID: e.Source.UserID, Script: scripts[script]}
+				j, err := json.Marshal(lm)
+				if err != nil {
+					errorf(c, "json.Marshal: %v", err)
+					return
+				}
+				ctx := appengine.NewContext(r)
+				log.Debugf(ctx, string(j))
+				d := base64.StdEncoding.EncodeToString(j)
+				t := taskqueue.NewPOSTTask("/push", url.Values{"data": {d}})
+				// delay, err := time.ParseDuration("2s")
+				delay := time.Duration(i) * time.Duration(2) * time.Second
+				t.Delay = delay
+				taskqueue.Add(c, t, "")
+			}
+		}
+	}
+
+	w.WriteHeader(200)
+}
+
+// handlePush is process event handler
+func handlePush(w http.ResponseWriter, r *http.Request) {
+	c := newContext(r)
+
+	data := r.FormValue("data")
+	if data == "" {
+		errorf(c, "No data")
+		return
+	}
+
+	j, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		errorf(c, "base64 DecodeString: %v", err)
+		return
+	}
+
+	ctx := appengine.NewContext(r)
+	log.Debugf(ctx, string(j))
+
+	lm := new(Msg)
+	err = json.Unmarshal(j, lm)
+	if err != nil {
+		errorf(c, "json.Unmarshal: %v", err)
+		return
+	}
+
 	bot, err := newLINEBot(c)
 	if err != nil {
 		errorf(c, "newLINEBot: %v", err)
 		return
 	}
 
-	logf(c, "EventType: %s\nMessage: %#v", e.Type, e.Message)
-
-	if e.Type == linebot.EventTypeMessage {
-		switch message := e.Message.(type) {
-		case *linebot.TextMessage:
-			m := linebot.NewTextMessage(message.Text + "とな")
-			if _, err = bot.ReplyMessage(e.ReplyToken, m).WithContext(c).Do(); err != nil {
-				errorf(c, "ReplayMessage: %v", err)
-				return
-			}
+	if lm.Script.Action.Token == 0 {
+		m := linebot.NewTextMessage(lm.Script.Text)
+		_, err = bot.PushMessage(lm.UserID, m).WithContext(c).Do()
+		if err != nil {
+			errorf(nil, "PushMessage: %v", err)
+			return
+		}
+	} else {
+		br1 := lm.Script.Action.Branch1
+		br2 := lm.Script.Action.Branch2
+		btn1 := linebot.NewMessageTemplateAction(br1.Text, br1.Address)
+		btn2 := linebot.NewMessageTemplateAction(br2.Text, br2.Address)
+		btns := linebot.NewButtonsTemplate("", lm.Script.Text, lm.Script.Text, btn1, btn2)
+		btnsMsg := linebot.NewTemplateMessage(lm.Script.Text, btns)
+		_, err = bot.PushMessage(lm.UserID, btnsMsg).WithContext(c).Do()
+		if err != nil {
+			errorf(nil, "PushMessage: %v", err)
+			return
 		}
 	}
 
