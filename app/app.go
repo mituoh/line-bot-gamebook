@@ -88,59 +88,43 @@ func handleTask(w http.ResponseWriter, r *http.Request) {
 
 	logf(c, "EventType: %s\nMessage: %#v", e.Type, e.Message)
 
-	if e.Type == linebot.EventTypeMessage {
+	switch e.Type {
+	case linebot.EventTypeMessage:
 		switch message := e.Message.(type) {
 		case *linebot.TextMessage:
 			if message.Text != "はじめる" {
 				w.WriteHeader(200)
 				return
 			}
-			scripts, _ := lgscript.Load("*start")
-			i := 0
-			for script := range scripts {
-				i++
-				lm := Msg{UserID: e.Source.UserID, Script: scripts[script]}
-				j, err := json.Marshal(lm)
-				if err != nil {
-					errorf(c, "json.Marshal: %v", err)
-					return
-				}
-				ctx := appengine.NewContext(r)
-				log.Debugf(ctx, string(j))
-				d := base64.StdEncoding.EncodeToString(j)
-				t := taskqueue.NewPOSTTask("/push", url.Values{"data": {d}})
-				// delay, err := time.ParseDuration("2s")
-				delay := time.Duration(i) * time.Duration(3) * time.Second
-				t.Delay = delay
-				taskqueue.Add(c, t, "")
-			}
-			ctx := appengine.NewContext(r)
-			log.Debugf(ctx, message.Text)
+			startAddress := "*start"
+			addPushTask(c, startAddress, e.Source.UserID)
 		}
-	} else if e.Type == linebot.EventTypePostback {
+	case linebot.EventTypePostback:
 		pbd := e.Postback.Data
-		scripts, _ := lgscript.Load(pbd)
-		i := 0
-		for script := range scripts {
-			i++
-			lm := Msg{UserID: e.Source.UserID, Script: scripts[script]}
-			j, err := json.Marshal(lm)
-			if err != nil {
-				errorf(c, "json.Marshal: %v", err)
-				return
-			}
-			ctx := appengine.NewContext(r)
-			log.Debugf(ctx, string(j))
-			d := base64.StdEncoding.EncodeToString(j)
-			t := taskqueue.NewPOSTTask("/push", url.Values{"data": {d}})
-			// delay, err := time.ParseDuration("2s")
-			delay := time.Duration(i) * time.Duration(2) * time.Second
-			t.Delay = delay
-			taskqueue.Add(c, t, "")
-		}
+		addPushTask(c, pbd, e.Source.UserID)
 	}
 
 	w.WriteHeader(200)
+}
+
+func addPushTask(c context.Context, a string, id string) {
+	scripts, _ := lgscript.Load(a)
+	i := 0
+	for script := range scripts {
+		i++
+		lm := Msg{UserID: id, Script: scripts[script]}
+		j, err := json.Marshal(lm)
+		if err != nil {
+			errorf(c, "json.Marshal: %v", err)
+			return
+		}
+		d := base64.StdEncoding.EncodeToString(j)
+		t := taskqueue.NewPOSTTask("/push", url.Values{"data": {d}})
+		// delay, err := time.ParseDuration("2s")
+		delay := time.Duration(i) * time.Duration(3) * time.Second
+		t.Delay = delay
+		taskqueue.Add(c, t, "")
+	}
 }
 
 // handlePush is process event handler
