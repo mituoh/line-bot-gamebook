@@ -91,7 +91,11 @@ func handleTask(w http.ResponseWriter, r *http.Request) {
 	if e.Type == linebot.EventTypeMessage {
 		switch message := e.Message.(type) {
 		case *linebot.TextMessage:
-			scripts, _ := lgscript.Load(message.Text)
+			if message.Text != "はじめる" {
+				w.WriteHeader(200)
+				return
+			}
+			scripts, _ := lgscript.Load("*start")
 			i := 0
 			for script := range scripts {
 				i++
@@ -106,10 +110,33 @@ func handleTask(w http.ResponseWriter, r *http.Request) {
 				d := base64.StdEncoding.EncodeToString(j)
 				t := taskqueue.NewPOSTTask("/push", url.Values{"data": {d}})
 				// delay, err := time.ParseDuration("2s")
-				delay := time.Duration(i) * time.Duration(2) * time.Second
+				delay := time.Duration(i) * time.Duration(3) * time.Second
 				t.Delay = delay
 				taskqueue.Add(c, t, "")
 			}
+			ctx := appengine.NewContext(r)
+			log.Debugf(ctx, message.Text)
+		}
+	} else if e.Type == linebot.EventTypePostback {
+		pbd := e.Postback.Data
+		scripts, _ := lgscript.Load(pbd)
+		i := 0
+		for script := range scripts {
+			i++
+			lm := Msg{UserID: e.Source.UserID, Script: scripts[script]}
+			j, err := json.Marshal(lm)
+			if err != nil {
+				errorf(c, "json.Marshal: %v", err)
+				return
+			}
+			ctx := appengine.NewContext(r)
+			log.Debugf(ctx, string(j))
+			d := base64.StdEncoding.EncodeToString(j)
+			t := taskqueue.NewPOSTTask("/push", url.Values{"data": {d}})
+			// delay, err := time.ParseDuration("2s")
+			delay := time.Duration(i) * time.Duration(2) * time.Second
+			t.Delay = delay
+			taskqueue.Add(c, t, "")
 		}
 	}
 
@@ -158,9 +185,9 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 	} else {
 		br1 := lm.Script.Action.Branch1
 		br2 := lm.Script.Action.Branch2
-		btn1 := linebot.NewMessageTemplateAction(br1.Text, br1.Address)
-		btn2 := linebot.NewMessageTemplateAction(br2.Text, br2.Address)
-		btns := linebot.NewButtonsTemplate("", lm.Script.Text, lm.Script.Text, btn1, btn2)
+		btn1 := linebot.NewPostbackTemplateAction(br1.Text, br1.Address, br1.Text)
+		btn2 := linebot.NewPostbackTemplateAction(br2.Text, br2.Address, br2.Text)
+		btns := linebot.NewButtonsTemplate("", "", lm.Script.Text, btn1, btn2)
 		btnsMsg := linebot.NewTemplateMessage(lm.Script.Text, btns)
 		_, err = bot.PushMessage(lm.UserID, btnsMsg).WithContext(c).Do()
 		if err != nil {
