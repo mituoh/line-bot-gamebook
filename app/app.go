@@ -102,6 +102,9 @@ func handleTask(w http.ResponseWriter, r *http.Request) {
 	case linebot.EventTypePostback:
 		pbd := e.Postback.Data
 		addPushTask(c, pbd, e.Source.UserID)
+	case linebot.EventTypeFollow:
+		startAddress := "*start"
+		addPushTask(c, startAddress, e.Source.UserID)
 	}
 
 	w.WriteHeader(200)
