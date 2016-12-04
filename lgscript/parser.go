@@ -9,6 +9,7 @@ type Script struct {
 		Token   Token
 		Branch1 Branch
 		Branch2 Branch
+		Wait    string
 	}
 }
 
@@ -46,6 +47,7 @@ func (p *Parser) Parse(a string) ([]Script, error) {
 		case TEXT:
 			// println("TEXT : " + lit)
 			script := &Script{Text: lit}
+			script.Action.Token = tok
 			scripts = append(scripts, *script)
 		case ADDRESS:
 			// println("ADDRESS : " + lit)
@@ -88,6 +90,12 @@ func (p *Parser) Parse(a string) ([]Script, error) {
 			if pf {
 				return scripts, nil
 			}
+		case WAIT:
+			script := &Script{}
+			_, lit := p.scanIgnoreWhitespace()
+			script.Action.Token = tok
+			script.Action.Wait = lit
+			scripts = append(scripts, *script)
 		case END:
 			// println("END")
 			if pf {

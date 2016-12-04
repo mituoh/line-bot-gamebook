@@ -79,6 +79,9 @@ func handleTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx := appengine.NewContext(r)
+	log.Debugf(ctx, string(j))
+
 	e := new(linebot.Event)
 	err = json.Unmarshal(j, e)
 	if err != nil {
@@ -112,10 +115,18 @@ func handleTask(w http.ResponseWriter, r *http.Request) {
 
 func addPushTask(c context.Context, a string, id string) {
 	scripts, _ := lgscript.Load(a)
-	oldTm := 0
-	i := 0
+	oldTm := time.Duration(0)
 	for script := range scripts {
-		i++
+		log.Debugf(c, scripts[script].Text)
+		if scripts[script].Action.Token == lgscript.WAIT {
+			delay, err := time.ParseDuration(scripts[script].Action.Wait)
+			if err != nil {
+				errorf(c, "time.ParseDuration: %v", err)
+				return
+			}
+			oldTm = delay + oldTm
+			continue
+		}
 		lm := Msg{UserID: id, Script: scripts[script]}
 		j, err := json.Marshal(lm)
 		if err != nil {
@@ -124,9 +135,8 @@ func addPushTask(c context.Context, a string, id string) {
 		}
 		d := base64.StdEncoding.EncodeToString(j)
 		t := taskqueue.NewPOSTTask("/push", url.Values{"data": {d}})
-		// delay, err := time.ParseDuration("2s")
 		l := len([]rune(lm.Script.Text))
-		tm := 2
+		tm := 2000
 		if l < 5 {
 			tm = 2000
 		} else if l < 10 {
@@ -136,10 +146,14 @@ func addPushTask(c context.Context, a string, id string) {
 		} else {
 			tm = 4000
 		}
-		delay := time.Duration(tm)*time.Millisecond + time.Duration(oldTm)*time.Millisecond
-		oldTm = tm + oldTm
+		delay := time.Duration(tm)*time.Millisecond + oldTm
+		oldTm = delay
 		t.Delay = delay
-		taskqueue.Add(c, t, "")
+		_, err = taskqueue.Add(c, t, "")
+		if err != nil {
+			errorf(c, "taskqueue.Add: %v", err)
+			return
+		}
 	}
 }
 
@@ -175,14 +189,15 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if lm.Script.Action.Token == 0 {
+	switch lm.Script.Action.Token {
+	case lgscript.TEXT:
 		m := linebot.NewTextMessage(lm.Script.Text)
 		_, err = bot.PushMessage(lm.UserID, m).WithContext(c).Do()
 		if err != nil {
 			errorf(nil, "PushMessage: %v", err)
 			return
 		}
-	} else {
+	case lgscript.BUTTONS:
 		br1 := lm.Script.Action.Branch1
 		br2 := lm.Script.Action.Branch2
 		btn1 := linebot.NewPostbackTemplateAction(br1.Text, br1.Address, br1.Text)

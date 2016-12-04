@@ -28,4 +28,6 @@ const (
 	BRANCH // -
 	// END : branch end point token
 	END // @end
+	// WAIT : wait token
+	WAIT
 )

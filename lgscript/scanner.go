@@ -140,6 +140,8 @@ func (s *Scanner) scanCommand() (tok Token, lit string) {
 		return BUTTONS, buf.String()
 	case "@end":
 		return END, buf.String()
+	case "@wait":
+		return WAIT, buf.String()
 	}
 
 	return WS, buf.String()
