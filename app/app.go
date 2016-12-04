@@ -135,26 +135,33 @@ func addPushTask(c context.Context, a string, id string) {
 		}
 		d := base64.StdEncoding.EncodeToString(j)
 		t := taskqueue.NewPOSTTask("/push", url.Values{"data": {d}})
+		// Time cal
 		l := len([]rune(lm.Script.Text))
-		tm := 2000
-		if l < 5 {
-			tm = 2000
-		} else if l < 10 {
-			tm = 2500
-		} else if l < 15 {
-			tm = 3000
-		} else {
-			tm = 4000
-		}
+		tm := delayTime(l)
 		delay := time.Duration(tm)*time.Millisecond + oldTm
 		oldTm = delay
 		t.Delay = delay
+		// Add task queue
 		_, err = taskqueue.Add(c, t, "")
 		if err != nil {
 			errorf(c, "taskqueue.Add: %v", err)
 			return
 		}
 	}
+}
+
+func delayTime(l int) (tm int) {
+	tm = 2000
+	if l < 5 {
+		tm = 2000
+	} else if l < 10 {
+		tm = 2500
+	} else if l < 15 {
+		tm = 3000
+	} else {
+		tm = 4000
+	}
+	return tm
 }
 
 // handlePush is process event handler

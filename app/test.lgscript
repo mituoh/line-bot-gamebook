@@ -1,7 +1,6 @@
 *start
 こんにちは
 これは文法の例です
-@wait 1m
 1行1行、3sくらい待ちながら出力します。
 @buttons 分岐機能もできます
 - [*state1] 分岐1に行きます
@@ -22,10 +21,12 @@
 @end
 
 *state3
+少し待って見ます
+@wait 30s
 隠しルートです
 @buttons 分岐3です
-- [*common] 共通ルートへ
-- [*hidden] 隠しルートへ
+- [*common] 共通エンディングへ
+- [*hidden] 隠しエンディングへ
 @end
 
 *common
