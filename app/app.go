@@ -112,6 +112,7 @@ func handleTask(w http.ResponseWriter, r *http.Request) {
 
 func addPushTask(c context.Context, a string, id string) {
 	scripts, _ := lgscript.Load(a)
+	oldTm := 0
 	i := 0
 	for script := range scripts {
 		i++
@@ -124,7 +125,19 @@ func addPushTask(c context.Context, a string, id string) {
 		d := base64.StdEncoding.EncodeToString(j)
 		t := taskqueue.NewPOSTTask("/push", url.Values{"data": {d}})
 		// delay, err := time.ParseDuration("2s")
-		delay := time.Duration(i) * time.Duration(3) * time.Second
+		l := len([]rune(lm.Script.Text))
+		tm := 2
+		if l < 5 {
+			tm = 2000
+		} else if l < 10 {
+			tm = 2500
+		} else if l < 15 {
+			tm = 3000
+		} else {
+			tm = 4000
+		}
+		delay := time.Duration(tm)*time.Millisecond + time.Duration(oldTm)*time.Millisecond
+		oldTm = tm + oldTm
 		t.Delay = delay
 		taskqueue.Add(c, t, "")
 	}
