@@ -28,3 +28,4 @@ _testmain.go
 # Custom
 line.env
 app.yaml
+app/scripts/

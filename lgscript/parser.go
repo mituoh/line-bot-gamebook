@@ -6,10 +6,9 @@ import "io"
 type Script struct {
 	Text   string
 	Action struct {
-		Token   Token
-		Branch1 Branch
-		Branch2 Branch
-		Wait    string
+		Token    Token
+		Branches [4]Branch
+		Wait     string
 	}
 }
 
@@ -75,11 +74,17 @@ func (p *Parser) Parse(a string) ([]Script, error) {
 			// println("\tTEXT : " + litTEXT)
 
 			// BRANCH
-			// First branch
-			p.parseBranch(&script.Action.Branch1.Address, &script.Action.Branch1.Text)
-
-			// Second branch
-			p.parseBranch(&script.Action.Branch2.Address, &script.Action.Branch2.Text)
+			for i := 0; i < 4; i++ {
+				_, l := p.scanIgnoreWhitespace() // "-" or "@end"
+				println(l)
+				if l == "-" {
+					p.parseBranch(&script.Action.Branches[i].Address,
+						&script.Action.Branches[i].Text)
+				} else {
+					p.unscan()
+					break
+				}
+			}
 
 			// END
 			t, _ := p.scanIgnoreWhitespace()
@@ -109,7 +114,6 @@ func (p *Parser) Parse(a string) ([]Script, error) {
 }
 
 func (p *Parser) parseBranch(a *string, t *string) {
-	p.scanIgnoreWhitespace() // "-"
 	p.scanIgnoreWhitespace() // "["
 	_, lit := p.scanIgnoreWhitespace()
 	*a = lit
@@ -119,11 +123,32 @@ func (p *Parser) parseBranch(a *string, t *string) {
 	// println("\t\tTEXT : " + litTEXT)
 }
 
+// scan returns the next token from the underlying scanner.
+// If a token has been unscanned then read that instead.
+func (p *Parser) scan() (tok Token, lit string) {
+	// If we have a token on the buffer, then return it.
+	if p.buf.n != 0 {
+		p.buf.n = 0
+		return p.buf.tok, p.buf.lit
+	}
+
+	// Otherwise read the next token from the scanner.
+	tok, lit = p.s.Scan()
+
+	// Save it to the buffer in case we unscan later.
+	p.buf.tok, p.buf.lit = tok, lit
+
+	return
+}
+
 // scanIgnoreWhitespace scans the next non-whitespace token.
 func (p *Parser) scanIgnoreWhitespace() (tok Token, lit string) {
-	tok, lit = p.s.Scan()
+	tok, lit = p.scan()
 	if tok == WS {
-		tok, lit = p.s.Scan()
+		tok, lit = p.scan()
 	}
 	return
 }
+
+// unscan pushes the previously read token back onto the buffer.
+func (p *Parser) unscan() { p.buf.n = 1 }

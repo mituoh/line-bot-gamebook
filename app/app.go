@@ -116,10 +116,10 @@ func handleTask(w http.ResponseWriter, r *http.Request) {
 func addPushTask(c context.Context, a string, id string) {
 	scripts, _ := lgscript.Load(a)
 	oldTm := time.Duration(0)
-	for script := range scripts {
-		log.Debugf(c, scripts[script].Text)
-		if scripts[script].Action.Token == lgscript.WAIT {
-			delay, err := time.ParseDuration(scripts[script].Action.Wait)
+	for _, script := range scripts {
+		log.Debugf(c, script.Text)
+		if script.Action.Token == lgscript.WAIT {
+			delay, err := time.ParseDuration(script.Action.Wait)
 			if err != nil {
 				errorf(c, "time.ParseDuration: %v", err)
 				return
@@ -127,7 +127,7 @@ func addPushTask(c context.Context, a string, id string) {
 			oldTm = delay + oldTm
 			continue
 		}
-		lm := Msg{UserID: id, Script: scripts[script]}
+		lm := Msg{UserID: id, Script: script}
 		j, err := json.Marshal(lm)
 		if err != nil {
 			errorf(c, "json.Marshal: %v", err)
@@ -205,11 +205,14 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case lgscript.BUTTONS:
-		br1 := lm.Script.Action.Branch1
-		br2 := lm.Script.Action.Branch2
-		btn1 := linebot.NewPostbackTemplateAction(br1.Text, br1.Address, br1.Text)
-		btn2 := linebot.NewPostbackTemplateAction(br2.Text, br2.Address, br2.Text)
-		btns := linebot.NewButtonsTemplate("", "", lm.Script.Text, btn1, btn2)
+		btns := linebot.NewButtonsTemplate("", "", lm.Script.Text)
+		for _, br := range lm.Script.Action.Branches {
+			if br.Text == "" {
+				break
+			}
+			btn := linebot.NewPostbackTemplateAction(br.Text, br.Address, br.Text)
+			btns.Actions = append(btns.Actions, btn)
+		}
 		btnsMsg := linebot.NewTemplateMessage(lm.Script.Text, btns)
 		_, err = bot.PushMessage(lm.UserID, btnsMsg).WithContext(c).Do()
 		if err != nil {

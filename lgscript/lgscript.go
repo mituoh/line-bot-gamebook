@@ -8,7 +8,7 @@ import (
 
 // Load return scripts
 func Load(a string) ([]Script, error) {
-	bs, err := ioutil.ReadFile("./test.lgscript")
+	bs, err := ioutil.ReadFile("./scripts/aoi.lgscript")
 	if err != nil {
 		log.Fatal(err)
 	}
