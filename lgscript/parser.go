@@ -2,12 +2,14 @@ package lgscript
 
 import "io"
 
+const maxBranches = 4
+
 // Script represents a LGScript.
 type Script struct {
 	Text   string
 	Action struct {
 		Token    Token
-		Branches [4]Branch
+		Branches [maxBranches]Branch
 		Wait     string
 	}
 }
@@ -74,7 +76,7 @@ func (p *Parser) Parse(a string) ([]Script, error) {
 			// println("\tTEXT : " + litTEXT)
 
 			// BRANCH
-			for i := 0; i < 4; i++ {
+			for i := 0; i < maxBranches; i++ {
 				_, l := p.scanIgnoreWhitespace() // "-" or "@end"
 				println(l)
 				if l == "-" {
