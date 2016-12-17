@@ -13,6 +13,8 @@ import (
 	"google.golang.org/appengine/taskqueue"
 	"google.golang.org/appengine/urlfetch"
 
+	"github.com/mjibson/goon"
+
 	"golang.org/x/net/context"
 
 	"github.com/joho/godotenv"
@@ -26,6 +28,12 @@ import (
 type Msg struct {
 	UserID string          `json:"userId"`
 	Script lgscript.Script `json:"script"`
+}
+
+// User is datastore object
+type User struct {
+	ID       string `datastore:"-" goon:"id"`
+	Tappable []string
 }
 
 var botHandler *httphandler.WebhookHandler
@@ -79,9 +87,6 @@ func handleTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := appengine.NewContext(r)
-	log.Debugf(ctx, string(j))
-
 	e := new(linebot.Event)
 	err = json.Unmarshal(j, e)
 	if err != nil {
@@ -104,7 +109,27 @@ func handleTask(w http.ResponseWriter, r *http.Request) {
 		}
 	case linebot.EventTypePostback:
 		pbd := e.Postback.Data
-		addPushTask(c, pbd, e.Source.UserID)
+		uid := e.Source.UserID
+		// Get user from Datastore
+		u := &User{ID: uid}
+		g := goon.NewGoon(r)
+		err = g.Get(u)
+		if err != nil {
+			errorf(c, "Goon get: %v", err)
+			return
+		}
+		for _, t := range u.Tappable {
+			if t == pbd {
+				addPushTask(c, pbd, uid)
+				// Clear user to Datastore
+				u = &User{ID: uid, Tappable: []string{}}
+				_, err := g.Put(u)
+				if err != nil {
+					errorf(nil, "Goon put: %v", err)
+				}
+				return
+			}
+		}
 	case linebot.EventTypeFollow:
 		startAddress := "*start"
 		addPushTask(c, startAddress, e.Source.UserID)
@@ -180,9 +205,6 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := appengine.NewContext(r)
-	log.Debugf(ctx, string(j))
-
 	lm := new(Msg)
 	err = json.Unmarshal(j, lm)
 	if err != nil {
@@ -206,17 +228,27 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 		}
 	case lgscript.BUTTONS:
 		btns := linebot.NewButtonsTemplate("", "", lm.Script.Text)
+		var t []string // tappable data
 		for _, br := range lm.Script.Action.Branches {
 			if br.Text == "" {
 				break
 			}
 			btn := linebot.NewPostbackTemplateAction(br.Text, br.Address, br.Text)
 			btns.Actions = append(btns.Actions, btn)
+			t = append(t, br.Address)
 		}
 		btnsMsg := linebot.NewTemplateMessage(lm.Script.Text, btns)
 		_, err = bot.PushMessage(lm.UserID, btnsMsg).WithContext(c).Do()
 		if err != nil {
 			errorf(nil, "PushMessage: %v", err)
+			return
+		}
+		// Put user to Datastore
+		g := goon.NewGoon(r)
+		u := &User{ID: lm.UserID, Tappable: t}
+		_, err := g.Put(u)
+		if err != nil {
+			errorf(nil, "Goon put: %v", err)
 			return
 		}
 	}
