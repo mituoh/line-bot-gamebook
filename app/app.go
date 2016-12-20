@@ -112,21 +112,13 @@ func handleTask(w http.ResponseWriter, r *http.Request) {
 		uid := e.Source.UserID
 		// Get user from Datastore
 		u := &User{ID: uid}
-		g := goon.NewGoon(r)
-		err = g.Get(u)
-		if err != nil {
-			errorf(c, "Goon get: %v", err)
-			return
-		}
+		getUser(r, u)
 		for _, t := range u.Tappable {
 			if t == pbd {
 				addPushTask(c, pbd, uid)
 				// Clear user to Datastore
 				u = &User{ID: uid, Tappable: []string{}}
-				_, err := g.Put(u)
-				if err != nil {
-					errorf(nil, "Goon put: %v", err)
-				}
+				putUser(r, u)
 				return
 			}
 		}
@@ -244,16 +236,31 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Put user to Datastore
-		g := goon.NewGoon(r)
 		u := &User{ID: lm.UserID, Tappable: t}
-		_, err := g.Put(u)
-		if err != nil {
-			errorf(nil, "Goon put: %v", err)
-			return
-		}
+		putUser(r, u)
 	}
 
 	w.WriteHeader(200)
+}
+
+func putUser(r *http.Request, u *User) {
+	c := newContext(r)
+	g := goon.NewGoon(r)
+	_, err := g.Put(u)
+	if err != nil {
+		errorf(c, "Goon put: %v", err)
+		return
+	}
+}
+
+func getUser(r *http.Request, u *User) {
+	c := newContext(r)
+	g := goon.NewGoon(r)
+	err := g.Get(u)
+	if err != nil {
+		errorf(c, "Goon get: %v", err)
+		return
+	}
 }
 
 func logf(c context.Context, format string, args ...interface{}) {
